@@ -1,9 +1,4 @@
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-from prophet import Prophet
-from prophet.plot import plot_plotly
-import plotly.graph_objects as go
+
 
 # --- Custom Page Config ---
 st.set_page_config(page_title="Stock Price Predictor", page_icon="📈", layout="wide")
@@ -99,4 +94,5 @@ if st.sidebar.button("🚀 Run Prediction"):
         st.plotly_chart(fig2, use_container_width=True)
     except Exception as e:
         st.error(f"Error during prediction: {e}")
+
 
