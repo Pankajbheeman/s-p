@@ -1,7 +1,3 @@
-# Install required libraries before running:
-# Run the following command in your terminal before executing this script:
-# pip install streamlit yfinance prophet plotly pandas
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -50,45 +46,57 @@ n_days = st.sidebar.slider("Forecast Days", 30, 365, 90)
 st.sidebar.markdown("💡 Examples: `AAPL`, `TSLA`, `GOOGL`, `RELIANCE.NS`")
 
 if st.sidebar.button("🚀 Run Prediction"):
-    # Step 1: Download Data
     st.subheader(f"Fetching data for **{stock_symbol}**...")
-    data = yf.download(stock_symbol, start="2020-01-01", end=None)
+    data = yf.download(stock_symbol, start="2020-01-01")
+    if data.empty:
+        st.error(f"No data found for {stock_symbol}. Please check the ticker symbol.")
+        st.stop()
 
-    # Step 2: Prepare Data
-    df = data[['Close']].reset_index()
-    df.rename(columns={'Date': 'ds', 'Close': 'y'}, inplace=True)
+    # Prepare Data
+    df = data.reset_index()
+    if 'Date' in df.columns:
+        df = df[['Date', 'Close']]
+        df.rename(columns={'Date': 'ds', 'Close': 'y'}, inplace=True)
+    elif 'Datetime' in df.columns:
+        df = df[['Datetime', 'Close']]
+        df.rename(columns={'Datetime': 'ds', 'Close': 'y'}, inplace=True)
+    else:
+        st.error("Downloaded data does not contain 'Date' or 'Datetime' columns.")
+        st.stop()
 
-    # Step 3: Build Prophet Model
-    model = Prophet(daily_seasonality=True)
-    model.fit(df)
+    try:
+        # Build Prophet Model
+        model = Prophet(daily_seasonality=True)
+        model.fit(df)
 
-    # Step 4: Forecast
-    future = model.make_future_dataframe(periods=n_days)
-    forecast = model.predict(future)
+        # Forecast
+        future = model.make_future_dataframe(periods=n_days)
+        forecast = model.predict(future)
 
-    # --- Layout: 2 Columns ---
-    col1, col2 = st.columns(2)
+        # --- Layout: 2 Columns ---
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("📊 Recent Stock Data")
+            st.dataframe(df.tail(10))
+        with col2:
+            st.subheader("📅 Forecasted Prices (Last Few Days)")
+            st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(10))
 
-    with col1:
-        st.subheader("📊 Recent Stock Data")
-        st.dataframe(df.tail(10))
+        # --- Interactive Chart ---
+        st.subheader("📈 Stock Price Forecast")
+        fig1 = plot_plotly(model, forecast)
+        st.plotly_chart(fig1, use_container_width=True)
 
-    with col2:
-        st.subheader("📅 Forecasted Prices (Last Few Days)")
-        st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(10))
+        # --- Confidence Interval Chart ---
+        st.subheader("🔮 Forecast with Confidence Interval")
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat'], 
+                                  name="Predicted", line=dict(color='cyan')))
+        fig2.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_upper'], 
+                                  name="Upper Bound", line=dict(color='green', dash='dot')))
+        fig2.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_lower'], 
+                                  name="Lower Bound", line=dict(color='red', dash='dot')))
+        st.plotly_chart(fig2, use_container_width=True)
+    except Exception as e:
+        st.error(f"Error during prediction: {e}")
 
-    # --- Interactive Chart ---
-    st.subheader("📈 Stock Price Forecast")
-    fig1 = plot_plotly(model, forecast)
-    st.plotly_chart(fig1, use_container_width=True)
-
-    # --- Confidence Interval Chart ---
-    st.subheader("🔮 Forecast with Confidence Interval")
-    fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat'], 
-                              name="Predicted", line=dict(color='cyan')))
-    fig2.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_upper'], 
-                              name="Upper Bound", line=dict(color='green', dash='dot')))
-    fig2.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_lower'], 
-                              name="Lower Bound", line=dict(color='red', dash='dot')))
-    st.plotly_chart(fig2, use_container_width=True)
